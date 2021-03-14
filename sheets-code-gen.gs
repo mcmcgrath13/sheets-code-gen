@@ -34,7 +34,7 @@ function onInstall(e) {
  * the mobile add-on version.
  */
 function showSidebar() {
-  var ui = HtmlService.createHtmlOutputFromFile('sidebar')
+  let ui = HtmlService.createHtmlOutputFromFile('sidebar')
       .setTitle('Code Generation');
   SpreadsheetApp.getUi().showSidebar(ui);
 }
@@ -42,26 +42,43 @@ function showSidebar() {
 /**
  * Gets the user-selected text and translates it from the origin language to the
  * destination language. The languages are notated by their two-letter short
- * form. For example, English is 'en', and Spanish is 'es'. The origin language
- * may be specified as an empty string to indicate that Google Translate should
- * auto-detect the language.
+ * form.
  *
  * @param {string} lang The two-letter short for the target language.
  * @return {Object} Object containing the result of the code generation.
  */
-function getGeneratedCode(lang) {
-  var ast = getAST();
-  var code = generateCode(ast, lang);
+const getGeneratedCode = (lang) => {
+  let ast = getAST();
+  let code = generateCode(ast, lang);
   return {
     code: code
   };
 }
 
-function getAST() {
+const getRange = (length) => [...Array(length).keys()];
+
+const getAST = () => {
   // read the spreadsheet, parse
-  return {};
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cells = [];
+  const sheets = ss.getSheets();
+  for (const i in sheets) {
+    let sheet = sheets[i];
+    let range = sheet.getDataRange();
+    let formulas = range.getFormulas();
+    for (const i of getRange(range.getNumRows())) {
+      for (const j of getRange(range.getNumColumns())) {
+        if (formulas[i][j]) {
+          let cell = range.getCell(i+1, j+1);
+          cells.push({location: cell.getA1Notation(), formula: formulas[i][j]});
+        }
+      }
+    }
+
+  }
+  return cells;
 }
 
-function generateCode(ast, lang) {
-  return "I am code";
+const generateCode = (ast, lang) => {
+  return ast.map((cell) => `${cell.location} = ${cell.formula}`).reduce((acc, curr) => acc + `${curr}\n`, '');
 }
