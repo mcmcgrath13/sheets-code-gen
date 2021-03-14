@@ -8,9 +8,10 @@
  *     running in, inspect e.authMode.
  */
 function onOpen(e) {
-  SpreadsheetApp.getUi().createAddonMenu()
-      .addItem('Start', 'showSidebar')
-      .addToUi();
+  SpreadsheetApp.getUi()
+    .createAddonMenu()
+    .addItem("Start", "showSidebar")
+    .addToUi();
 }
 
 /**
@@ -34,8 +35,9 @@ function onInstall(e) {
  * the mobile add-on version.
  */
 function showSidebar() {
-  let ui = HtmlService.createHtmlOutputFromFile('sidebar')
-      .setTitle('Code Generation');
+  let ui = HtmlService.createHtmlOutputFromFile("sidebar").setTitle(
+    "Code Generation"
+  );
   SpreadsheetApp.getUi().showSidebar(ui);
 }
 
@@ -51,11 +53,9 @@ const getGeneratedCode = (lang) => {
   let ast = getAST();
   let code = generateCode(ast, lang);
   return {
-    code: code
+    code: code,
   };
-}
-
-const getRange = (length) => [...Array(length).keys()];
+};
 
 const getAST = () => {
   // read the spreadsheet, parse
@@ -64,21 +64,28 @@ const getAST = () => {
   const sheets = ss.getSheets();
   for (const i in sheets) {
     let sheet = sheets[i];
+    let sheetName = sheet.getName();
     let range = sheet.getDataRange();
     let formulas = range.getFormulas();
     for (const i of getRange(range.getNumRows())) {
       for (const j of getRange(range.getNumColumns())) {
         if (formulas[i][j]) {
-          let cell = range.getCell(i+1, j+1);
-          cells.push({location: cell.getA1Notation(), formula: formulas[i][j]});
+          let cell = range.getCell(i + 1, j + 1);
+          cells.push({
+            sheet: sheetName,
+            row: cell.getRow(),
+            column: cell.getColumn(),
+            formula: formulas[i][j],
+          });
         }
       }
     }
-
   }
   return cells;
-}
+};
 
 const generateCode = (ast, lang) => {
-  return ast.map((cell) => `${cell.location} = ${cell.formula}`).reduce((acc, curr) => acc + `${curr}\n`, '');
-}
+  return ast
+    .map((cell) => `${cell.sheet}(${cell.row}, ${cell.column}) = ${cell.formula}`)
+    .reduce((acc, curr) => acc + `${curr}\n`, "");
+};
