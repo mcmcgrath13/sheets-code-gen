@@ -49,7 +49,7 @@ function showSidebar() {
  * @param {string} lang The two-letter short for the target language.
  * @return {Object} Object containing the result of the code generation.
  */
-const getGeneratedCode = (lang) => {
+const getGeneratedCode = (lang: string) => {
   let ast = getAST();
   let code = generateCode(ast, lang);
   return {
@@ -60,32 +60,14 @@ const getGeneratedCode = (lang) => {
 const getAST = () => {
   // read the spreadsheet, parse
   let ss = SpreadsheetApp.getActiveSpreadsheet();
-  const cells = [];
-  const sheets = ss.getSheets();
-  for (const i in sheets) {
-    let sheet = sheets[i];
-    let sheetName = sheet.getName();
-    let range = sheet.getDataRange();
-    let formulas = range.getFormulas();
-    for (const i of getRange(range.getNumRows())) {
-      for (const j of getRange(range.getNumColumns())) {
-        if (formulas[i][j]) {
-          let cell = range.getCell(i + 1, j + 1);
-          cells.push({
-            sheet: sheetName,
-            row: cell.getRow(),
-            column: cell.getColumn(),
-            formula: formulas[i][j],
-          });
-        }
-      }
-    }
-  }
-  return cells;
+  let ast = new Workbook(ss);
+  return ast;
 };
 
-const generateCode = (ast, lang) => {
-  return ast
-    .map((cell) => `${cell.sheet}(${cell.row}, ${cell.column}) = ${cell.formula}`)
+const generateCode = (ast: Workbook, lang: string) => {
+  return ast.ranges
+    .map(
+      (cell) => `${cell.sheet}(${cell.row}, ${cell.column}) = ${cell.formula}`
+    )
     .reduce((acc, curr) => acc + `${curr}\n`, "");
 };
