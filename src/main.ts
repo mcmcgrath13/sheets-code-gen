@@ -67,7 +67,10 @@ const getAST = () => {
 const generateCode = (ast: Workbook, lang: string) => {
   return ast.ranges
     .map(
-      (cell) => `${cell.sheet}(${cell.row}, ${cell.column}) = ${cell.formula}`
+      (cell) =>
+        `${cell.sheet.name} (${cell.row}, ${
+          cell.column
+        }) = ${cell.formula.print()}`
     )
     .reduce((acc, curr) => acc + `${curr}\n`, "");
 };
