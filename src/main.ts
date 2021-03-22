@@ -50,6 +50,7 @@ function showSidebar() {
  * @return {Object} Object containing the result of the code generation.
  */
 const getGeneratedCode = (lang: string) => {
+  Logger.log(lang);
   let ast = getAST();
   let code = generateCode(ast, lang);
   return {
@@ -65,12 +66,5 @@ const getAST = () => {
 };
 
 const generateCode = (ast: Workbook, lang: string) => {
-  return ast.ranges
-    .map(
-      (cell) =>
-        `${cell.sheet.name} (${cell.row}, ${
-          cell.column
-        }) = ${cell.formula.print()}`
-    )
-    .reduce((acc, curr) => acc + `${curr}\n`, "");
+  return utils.langs[lang].print(ast);
 };
