@@ -113,6 +113,8 @@ class Formula {
         this.args.push(new Formula(formulaTokens, token));
       } else if (token.subtype === "stop") {
         break;
+      } else if (token.subtype === "range") {
+
       } else {
         this.args.push(token.value);
       }
@@ -131,7 +133,7 @@ class Formula {
 
     str += this.args
       .map((arg) => {
-        return arg instanceof Formula ? arg.print() : arg;
+        return arg['print'] ? arg.print() : arg;
       })
       .join("");
 
@@ -140,5 +142,56 @@ class Formula {
     }
 
     return str;
+  }
+}
+
+class RangeReference {
+  constructor(r1c1: String) {
+    let re = /^(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
+    let matches = r1c1.split(':').map(r => r.match(re));
+    this.start = new CellReference(matches[0].groups.row, matches[0].groups.column)
+    if (matches.length === 2) {
+      this.stop = new CellReference(matches[1].groups.row, matches[1].groups.column)
+    } else {
+      this.stop = this.start;
+    }
+  }
+
+  isCell() {
+    return this.start === this.stop;
+  }
+
+  print() {
+    return this.isCell() ? this.start.print() : `${this.start.print()}:${this.stop.print()}`
+  }
+}
+
+const parseCellRef = (str: String | undefined) => {
+  if (!str) {
+    return { isRelative: false, value: 0 }; // not on the grid this would be the whole row/column
+  }
+
+  let re = /^\[(?<val>\-?[0-9]+)\]$/;
+  let match = str.match(re);
+  if (match) {
+    return { isRelative: true, value: parseInt(rowMatch.groups.val) };
+  } else {
+    return { isRelative: false, value: parseInt(str) };
+  }
+}
+
+class CellReference {
+  constructor(row: String, column: String) {
+    let re = /^\[(?<val>\-?[0-9]+)\]$/;
+    let rowRes = parseCellRef(row);
+    this.rowIsRelative = rowRes.isRelative;
+    this.row = rowRes.value;
+    let columnRes = parseCellRef(column);
+    this.columnIsRelative = columnRes.isRelative;
+    this.column = columnRes.value;
+  }
+
+  print() {
+    return 'CELL'
   }
 }
