@@ -114,7 +114,8 @@ class Formula {
       } else if (token.subtype === "stop") {
         break;
       } else if (token.subtype === "range") {
-
+        Logger.log(token.value);
+        this.args.push(new RangeReference(token.value));
       } else {
         this.args.push(token.value);
       }
@@ -133,7 +134,7 @@ class Formula {
 
     str += this.args
       .map((arg) => {
-        return arg['print'] ? arg.print() : arg;
+        return arg["print"] ? arg.print() : arg;
       })
       .join("");
 
@@ -145,13 +146,21 @@ class Formula {
   }
 }
 
+interface RangeMatch {
+  row: String | undefined;
+  column: String | undefined;
+  sheet: String | undefined;
+}
+
 class RangeReference {
   constructor(r1c1: String) {
-    let re = /^(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
-    let matches = r1c1.split(':').map(r => r.match(re));
-    this.start = new CellReference(matches[0].groups.row, matches[0].groups.column)
+    let re = /^(?:(?<sheet>.*)!)?(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
+    let matches = r1c1.split(":").map((r) => r.match(re));
+    Logger.log(matches);
+    this.sheet = matches[0].groups.sheet;
+    this.start = new CellReference(matches[0].groups);
     if (matches.length === 2) {
-      this.stop = new CellReference(matches[1].groups.row, matches[1].groups.column)
+      this.stop = new CellReference(matches[1].groups);
     } else {
       this.stop = this.start;
     }
@@ -162,36 +171,70 @@ class RangeReference {
   }
 
   print() {
-    return this.isCell() ? this.start.print() : `${this.start.print()}:${this.stop.print()}`
-  }
-}
-
-const parseCellRef = (str: String | undefined) => {
-  if (!str) {
-    return { isRelative: false, value: 0 }; // not on the grid this would be the whole row/column
-  }
-
-  let re = /^\[(?<val>\-?[0-9]+)\]$/;
-  let match = str.match(re);
-  if (match) {
-    return { isRelative: true, value: parseInt(rowMatch.groups.val) };
-  } else {
-    return { isRelative: false, value: parseInt(str) };
+    let str = this.sheet ? `${this.sheet}!` : "";
+    str += this.isCell()
+      ? this.start.print()
+      : `${this.start.print()}:${this.stop.print()}`;
+    return str;
   }
 }
 
 class CellReference {
-  constructor(row: String, column: String) {
+  constructor(match: RangeMatch) {
     let re = /^\[(?<val>\-?[0-9]+)\]$/;
-    let rowRes = parseCellRef(row);
-    this.rowIsRelative = rowRes.isRelative;
-    this.row = rowRes.value;
-    let columnRes = parseCellRef(column);
-    this.columnIsRelative = columnRes.isRelative;
-    this.column = columnRes.value;
+    this.row = new CellAddress(match.row);
+    this.column = new CellAddress(match.column);
+  }
+
+  isOnlyRow() {
+    return this.row.isEmpty();
+  }
+
+  isOnlyColumn() {
+    return this.column.isEmpty();
   }
 
   print() {
-    return 'CELL'
+    if (this.isOnlyRow()) {
+      return `C${this.column.print()}`;
+    } else if (this.isOnlyColumn()) {
+      return `R${this.row.print()}`;
+    } else {
+      return `R${this.row.print()}C${this.column.print()}`;
+    }
+  }
+}
+
+class CellAddress {
+  constructor(str: String | undefined) {
+    if (!str) {
+      this.isRelative = false;
+      this.value = 0;
+      return;
+    }
+
+    let re = /^\[(?<val>\-?[0-9]+)\]$/;
+    let match = str.match(re);
+    if (match) {
+      this.isRelative = true;
+      this.value = parseInt(match.groups.val);
+    } else {
+      this.isRelative = false;
+      this.value = parseInt(str);
+    }
+  }
+
+  isEmpty() {
+    return this.value === 0 && !this.isRelative;
+  }
+
+  print() {
+    if (this.isEmpty()) {
+      return "";
+    } else if (this.isRelative) {
+      return `[${this.value}]`;
+    } else {
+      return `${this.value}`;
+    }
   }
 }
