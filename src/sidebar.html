@@ -6,6 +6,13 @@
       rel="stylesheet"
       href="https://ssl.gstatic.com/docs/script/css/add-ons1.css"
     />
+    <!-- <link rel="stylesheet" type="text/css" href="jsonview.bundle.css"> -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/jquery-jsonview/1.2.3/jquery.jsonview.min.css"
+      integrity="sha512-aM9sVC1lVWwuuq38iKbFdk04uGgRyr7ERRnO990jReifKRrYGLugrpLCj27Bfejv6YnAFW2iN3sm6x/jbW7YBg=="
+      crossorigin="anonymous"
+    />
     <!-- The CSS package above applies Google styling to buttons and other elements. -->
 
     <style>
@@ -33,6 +40,9 @@
       }
       .width-100 {
         width: 100%;
+      }
+      #generated-code .jsonview ul {
+        margin: 0 0 0 1em;
       }
     </style>
   </head>
@@ -79,8 +89,12 @@
       <span class="gray branding-text">Translate sample by Google</span>
     </div>
     -->
-
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/jquery-jsonview/1.2.3/jquery.jsonview.min.js"
+      integrity="sha512-ff/E/8AEnLDXnTCyIa+l80evPRNH8q5XnPGY/NgBL645jzHL1ksmXonVMDt7e5D34Y4DTOv+P+9Rmo9jBSSyIg=="
+      crossorigin="anonymous"
+    ></script>
     <script>
       /**
        * On document load, assign click handlers to each button and try to load the
@@ -100,7 +114,14 @@
         var lang = $("input[name=lang]:checked").val();
         google.script.run
           .withSuccessHandler(function (generatedCode, element) {
-            $("#generated-code").text(generatedCode.code);
+            let innerText = generatedCode.code;
+            if (lang === "ast") {
+              $("#generated-code").JSONView(generatedCode.code, {
+                collapsed: true,
+              });
+            } else {
+              $("#generated-code").text(generatedCode.code);
+            }
             element.disabled = false;
           })
           .withFailureHandler(function (msg, element) {

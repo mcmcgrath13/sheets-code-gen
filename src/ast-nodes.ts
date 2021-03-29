@@ -1,3 +1,5 @@
+const DEFAULT_NUMBER_FORMAT = "0.###############";
+
 // build out classes for ast nodes here or maybe just use type script
 class Workbook {
   constructor(ss: SpreadsheetApp.Spreadsheet) {
@@ -26,7 +28,10 @@ class Sheet {
       let lastRange = null;
       for (const j of utils.range(this.numColumns)) {
         let cell = sheet.getRange(i + 1, j + 1);
-        if (cell.getFormula()) {
+        if (
+          cell.getFormula() ||
+          cell.getNumberFormat() !== DEFAULT_NUMBER_FORMAT
+        ) {
           let range = new Range(cell);
           if (!lastRange || (lastRange && !lastRange.mergeColumn(range))) {
             this.ranges.push(range);
@@ -95,6 +100,33 @@ class Range {
       return false;
     }
   }
+
+  print(ab: ?boolean) {
+    return this.formula.print()
+      ? this.formula.print(
+          ab,
+          this.row,
+          this.column
+        )
+      : this.format;
+  }
+
+  printAddress(ab: ?boolean) {
+    const format = (row, column) => {
+      if (ab) {
+        return utils.getAlpha(column) + row;
+      } else {
+        return `R${row}C${column}`;
+      }
+    }
+
+    let str = format(this.row, this.column);
+    if (!this.isCell()) {
+      str += ':' + format(this.row + this.numRows - 1, this.column + this.numColumns - 1);
+    }
+
+    return str;
+  }
 }
 
 interface FormulaToken {
@@ -114,7 +146,6 @@ class Formula {
       } else if (token.subtype === "stop") {
         break;
       } else if (token.subtype === "range") {
-        Logger.log(token.value);
         this.args.push(new RangeReference(token.value));
       } else {
         this.args.push(token.value);
@@ -122,7 +153,11 @@ class Formula {
     }
   }
 
-  print() {
+  print(
+    ab: ?boolean,
+    row: ?number,
+    column: ?number
+  ) {
     let str = "";
 
     if (this.head !== "__TOP__" && this.head !== "subexpression") {
@@ -134,7 +169,9 @@ class Formula {
 
     str += this.args
       .map((arg) => {
-        return arg["print"] ? arg.print() : arg;
+        return arg["print"]
+          ? arg.print(ab, row, column)
+          : arg;
       })
       .join("");
 
@@ -156,7 +193,6 @@ class RangeReference {
   constructor(r1c1: String) {
     let re = /^(?:(?<sheet>.*)!)?(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
     let matches = r1c1.split(":").map((r) => r.match(re));
-    Logger.log(matches);
     this.sheet = matches[0].groups.sheet;
     this.start = new CellReference(matches[0].groups);
     if (matches.length === 2) {
@@ -170,11 +206,19 @@ class RangeReference {
     return this.start === this.stop;
   }
 
-  print() {
+  print(
+    ab: ?boolean,
+    row: ?number,
+    column: ?number
+  ) {
     let str = this.sheet ? `${this.sheet}!` : "";
     str += this.isCell()
-      ? this.start.print()
-      : `${this.start.print()}:${this.stop.print()}`;
+      ? this.start.print(ab, row, column)
+      : `${this.start.print(ab, row, column)}:${this.stop.print(
+          ab,
+          row,
+          column
+        )}`;
     return str;
   }
 }
@@ -194,13 +238,14 @@ class CellReference {
     return this.column.isEmpty();
   }
 
-  print() {
-    if (this.isOnlyRow()) {
-      return `C${this.column.print()}`;
-    } else if (this.isOnlyColumn()) {
-      return `R${this.row.print()}`;
+  print(ab: ?boolean, row, column) {
+    if (ab) {
+      return `${this.column.printAB(column, false)}${this.row.printAB(
+        row,
+        true
+      )}`;
     } else {
-      return `R${this.row.print()}C${this.column.print()}`;
+      return `${this.row.print("R")}${this.column.print("C")}`;
     }
   }
 }
@@ -228,13 +273,26 @@ class CellAddress {
     return this.value === 0 && !this.isRelative;
   }
 
-  print() {
+  print(prefix) {
     if (this.isEmpty()) {
       return "";
     } else if (this.isRelative) {
-      return `[${this.value}]`;
+      return `[${prefix}${this.value}]`;
     } else {
-      return `${this.value}`;
+      return `${prefix}${this.value}`;
     }
+  }
+
+  printAB(anchor: number, isRow) {
+    if (this.isEmpty()) return "";
+    let str = this.isRelative ? "" : "$";
+    let val = this.isRelative ? this.value + anchor : this.value;
+    if (isRow) {
+      str += `${val}`;
+    } else {
+      str += utils.getAlpha(val);
+    }
+    Logger.log(`value: ${this.value} anchor: ${anchor} str: ${str}`);
+    return str;
   }
 }
