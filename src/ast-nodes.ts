@@ -103,11 +103,7 @@ class Range {
 
   print(ab: ?boolean) {
     return this.formula.print()
-      ? this.formula.print(
-          ab,
-          this.row,
-          this.column
-        )
+      ? this.formula.print(ab, this.row, this.column)
       : this.format;
   }
 
@@ -118,11 +114,13 @@ class Range {
       } else {
         return `R${row}C${column}`;
       }
-    }
+    };
 
     let str = format(this.row, this.column);
     if (!this.isCell()) {
-      str += ':' + format(this.row + this.numRows - 1, this.column + this.numColumns - 1);
+      str +=
+        ":" +
+        format(this.row + this.numRows - 1, this.column + this.numColumns - 1);
     }
 
     return str;
@@ -153,11 +151,7 @@ class Formula {
     }
   }
 
-  print(
-    ab: ?boolean,
-    row: ?number,
-    column: ?number
-  ) {
+  print(ab: ?boolean, row: ?number, column: ?number) {
     let str = "";
 
     if (this.head !== "__TOP__" && this.head !== "subexpression") {
@@ -169,9 +163,7 @@ class Formula {
 
     str += this.args
       .map((arg) => {
-        return arg["print"]
-          ? arg.print(ab, row, column)
-          : arg;
+        return arg["print"] ? arg.print(ab, row, column) : arg;
       })
       .join("");
 
@@ -206,11 +198,7 @@ class RangeReference {
     return this.start === this.stop;
   }
 
-  print(
-    ab: ?boolean,
-    row: ?number,
-    column: ?number
-  ) {
+  print(ab: ?boolean, row: ?number, column: ?number) {
     let str = this.sheet ? `${this.sheet}!` : "";
     str += this.isCell()
       ? this.start.print(ab, row, column)

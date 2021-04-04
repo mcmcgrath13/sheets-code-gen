@@ -66,5 +66,5 @@ const getAST = () => {
 };
 
 const generateCode = (ast: Workbook, lang: string) => {
-  return utils.langs[lang].print(ast);
+  return langs[lang].print(ast);
 };
