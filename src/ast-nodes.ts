@@ -33,16 +33,42 @@ class Sheet {
           cell.getNumberFormat() !== DEFAULT_NUMBER_FORMAT
         ) {
           let range = new Range(cell);
-          if (!lastRange || (lastRange && !lastRange.mergeColumn(range))) {
-            this.ranges.push(range);
-            lastRange = range;
+          this.ranges.push(range);
+          if (!range.formula.isEmpty()) {
+            this.values[i][j] = range;
           }
+          // if (!lastRange || (lastRange && !lastRange.mergeColumn(range))) {
+          //   this.ranges.push(range);
+          //   lastRange = range;
+          // }
         } else {
           lastRange = null;
         }
       }
     }
 
+    // for (var i = 0; i < this.ranges.length; i++) {
+    //   let range = this.ranges[i];
+    //   let neighIdx = utils.findRangeBelow(range, this.ranges);
+    //   while (neighIdx !== -1 && range.mergeRow(this.ranges[neighIdx])) {
+    //     this.ranges.splice(neighIdx, 1);
+    //     neighIdx = utils.findRangeBelow(range, this.ranges);
+    //   }
+    // }
+  }
+
+  collapseRanges() {
+    // collapse left to right
+    for (var i = 0; i < this.ranges.length; i++) {
+      let range = this.ranges[i];
+      let neighIdx = utils.findRangeRight(range, this.ranges);
+      while (neighIdx !== -1 && range.mergeColumn(this.ranges[neighIdx])) {
+        this.ranges.splice(neighIdx, 1);
+        neighIdx = utils.findRangeRight(range, this.ranges);
+      }
+    }
+
+    // collapse top to bottom
     for (var i = 0; i < this.ranges.length; i++) {
       let range = this.ranges[i];
       let neighIdx = utils.findRangeBelow(range, this.ranges);
@@ -151,6 +177,10 @@ class Formula {
     }
   }
 
+  isEmpty() {
+    return this.head === "__TOP__" && this.args.length === 0;
+  }
+
   print(ab: ?boolean, row: ?number, column: ?number) {
     let str = "";
 
@@ -196,6 +226,21 @@ class RangeReference {
 
   isCell() {
     return this.start === this.stop;
+  }
+
+  // TODO: extents not calculating right?
+  rowExtent(start) {
+    return [
+      this.start.row.value + this.start.row.isRelative ? start : 0,
+      this.stop.row.value + this.stop.row.isRelative ? start : 0,
+    ];
+  }
+
+  columnExtent(start) {
+    return [
+      this.start.column.value + this.start.column.isRelative ? start : 0,
+      this.stop.column.value + this.stop.column.isRelative ? start : 0,
+    ];
   }
 
   print(ab: ?boolean, row: ?number, column: ?number) {
@@ -280,7 +325,6 @@ class CellAddress {
     } else {
       str += utils.getAlpha(val);
     }
-    Logger.log(`value: ${this.value} anchor: ${anchor} str: ${str}`);
     return str;
   }
 }
