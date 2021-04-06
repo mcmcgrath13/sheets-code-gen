@@ -88,14 +88,24 @@ const langs = {
         ? v instanceof Range
           ? this.range2var(v, sheetName)
           : v.toString()
-        : "";
+        : "nothing";
     },
-    vals2Str(sheet: Sheet) {
-      return sheet.values.map((row) =>
-        row.map((v) => this.val2Str(v, sheet.name))
+    vals2Str(vals: Array, sheetName: String) {
+      return (
+        "[" +
+        vals
+          .map((row) => row.map((v) => this.val2Str(v, sheetName)).join(" "))
+          .join("; ") +
+        "]"
       );
     },
     ab2Var(sheet: String, address: String) {
+      if (address.includes("!")) {
+        return this.toSnakeCase(address)
+          .replace(/:/g, "")
+          .replace(/\$/g, "")
+          .replace(/!/g, "_");
+      }
       return (
         this.toSnakeCase(sheet) +
         "_" +
@@ -164,9 +174,17 @@ const langs = {
       }
 
       const varVals = [];
-      for (let i = v.rowExtent[0] - 1; i++; i < v.rowExtent[1]) {
+      for (
+        let i = v.rowExtent[0] - 1;
+        i < v.rowExtent[1] && i < vals.length;
+        i++
+      ) {
         const rowVals = [];
-        for (let j = v.columnExtent[0] - 1; j++; j < v.columnExtent[1]) {
+        for (
+          let j = v.columnExtent[0] - 1;
+          j < v.columnExtent[1] && j < vals[i].length;
+          j++
+        ) {
           const varVal = vals[i][j];
           rowVals.push(varVal);
           if (varVal instanceof Range) {
@@ -179,13 +197,13 @@ const langs = {
         varVals.push(rowVals);
       }
 
-      return { text: this.vals2Str(varVals), vars: depVars };
+      return { text: this.vals2Str(varVals, v.sheet), vars: depVars };
     },
     addToSorted(sorted, v, k, m, sheetVals) {
       Logger.log(v);
       v.vars.forEach((vr) => {
-        if (!sorted.find((e) => e.lhs === vr)) {
-          const varName = vr.var;
+        const varName = vr.var;
+        if (!sorted.find((e) => e.lhs === varName)) {
           if (m.has(varName)) {
             sorted.push({ lhs: varName, rhs: m.get(varName).text });
           } else {
@@ -195,7 +213,9 @@ const langs = {
           }
         }
       });
-      sorted.push({ lhs: k, rhs: v.text });
+      if (!sorted.find((e) => e.lhs === k)) {
+        sorted.push({ lhs: k, rhs: v.text });
+      }
     },
     print(ast) {
       const sheetVals = new Map();
@@ -218,6 +238,10 @@ const langs = {
       exprs.forEach((v, k, m) => {
         this.addToSorted(sorted, v, k, m, sheetVals);
       });
+
+      Logger.log(sorted);
+
+      return sorted.map((s) => s.lhs + " = " + s.rhs).join("\n");
     },
   },
 };

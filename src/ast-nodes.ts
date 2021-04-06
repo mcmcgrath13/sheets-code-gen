@@ -230,16 +230,22 @@ class RangeReference {
 
   // TODO: extents not calculating right?
   rowExtent(start) {
+    if (this.start.isOnlyColumn()) {
+      return [1, Number.MAX_VALUE];
+    }
     return [
-      this.start.row.value + this.start.row.isRelative ? start : 0,
-      this.stop.row.value + this.stop.row.isRelative ? start : 0,
+      this.start.row.value + (this.start.row.isRelative ? start : 0),
+      this.stop.row.value + (this.stop.row.isRelative ? start : 0),
     ];
   }
 
   columnExtent(start) {
+    if (this.start.isOnlyRow()) {
+      return [1, Number.MAX_VALUE];
+    }
     return [
-      this.start.column.value + this.start.column.isRelative ? start : 0,
-      this.stop.column.value + this.stop.column.isRelative ? start : 0,
+      this.start.column.value + (this.start.column.isRelative ? start : 0),
+      this.stop.column.value + (this.stop.column.isRelative ? start : 0),
     ];
   }
 
@@ -264,11 +270,11 @@ class CellReference {
   }
 
   isOnlyRow() {
-    return this.row.isEmpty();
+    return this.column.isEmpty();
   }
 
   isOnlyColumn() {
-    return this.column.isEmpty();
+    return this.row.isEmpty();
   }
 
   print(ab: ?boolean, row, column) {
