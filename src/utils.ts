@@ -66,7 +66,7 @@ const langs = {
           sheet.collapseRanges();
           return (
             `${sheet.name}\n  ` +
-            sheet.ranges // TODO: collapsed view here
+            sheet.ranges
               .map((cell) => `${cell.printAddress(true)} = ${cell.print(true)}`)
               .join("\n  ")
           );

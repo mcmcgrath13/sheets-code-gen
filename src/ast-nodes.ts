@@ -19,13 +19,12 @@ class Workbook {
 class Sheet {
   constructor(sheet: SpreadsheetApp.Sheet) {
     this.name = sheet.getName();
-    this.values = sheet.getDataRange().getValues(); // TODO: how to handle values which are the result of a formula - leave in? reference formula? reference range?
+    this.values = sheet.getDataRange().getValues();
     this.numRows = sheet.getLastRow();
     this.numColumns = sheet.getLastColumn();
     this.ranges = [];
 
     for (const i of utils.range(this.numRows)) {
-      let lastRange = null;
       for (const j of utils.range(this.numColumns)) {
         let cell = sheet.getRange(i + 1, j + 1);
         if (
@@ -37,24 +36,9 @@ class Sheet {
           if (!range.formula.isEmpty()) {
             this.values[i][j] = range;
           }
-          // if (!lastRange || (lastRange && !lastRange.mergeColumn(range))) {
-          //   this.ranges.push(range);
-          //   lastRange = range;
-          // }
-        } else {
-          lastRange = null;
         }
       }
     }
-
-    // for (var i = 0; i < this.ranges.length; i++) {
-    //   let range = this.ranges[i];
-    //   let neighIdx = utils.findRangeBelow(range, this.ranges);
-    //   while (neighIdx !== -1 && range.mergeRow(this.ranges[neighIdx])) {
-    //     this.ranges.splice(neighIdx, 1);
-    //     neighIdx = utils.findRangeBelow(range, this.ranges);
-    //   }
-    // }
   }
 
   collapseRanges() {
@@ -228,7 +212,6 @@ class RangeReference {
     return this.start === this.stop;
   }
 
-  // TODO: extents not calculating right?
   rowExtent(start) {
     if (this.start.isOnlyColumn()) {
       return [1, Number.MAX_VALUE];
