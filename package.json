@@ -1,0 +1,11 @@
+{
+  "name": "sheets-code-gen",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/mcmcgrath13/sheets-code-gen.git",
+  "license": "MIT",
+  "dependencies": {
+    "@google/clasp": "^2.3.0",
+    "@types/google-apps-script": "^1.0.31"
+  }
+}

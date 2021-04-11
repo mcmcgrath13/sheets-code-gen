@@ -29,7 +29,7 @@ const ALPHABET = [
 
 // get an array of indexes of the given length
 const utils = {
-  range(length) {
+  range(length: number) {
     return [...Array(length).keys()];
   },
   findRangeBelow(range: Range, ranges: Range[]): number {
@@ -50,7 +50,7 @@ const utils = {
       );
     });
   },
-  getAlpha(num, str) {
+  getAlpha(num: number, str?: string): string {
     if (num < 0) return str;
     const idx = (num - 1) % ALPHABET.length;
     let s = str ? ALPHABET[idx] + str : ALPHABET[idx];
@@ -60,7 +60,7 @@ const utils = {
 
 const langs = {
   gs: {
-    print(ast) {
+    print(ast: Workbook) {
       return ast.sheets
         .map((sheet) => {
           sheet.collapseRanges();
@@ -75,22 +75,22 @@ const langs = {
     },
   },
   ast: {
-    print(ast) {
+    print(ast: Workbook) {
       return JSON.stringify(ast);
     },
   },
   jl: {
-    toSnakeCase(str: String) {
+    toSnakeCase(str: string) {
       return str.toLowerCase().replace(/\W/g, "_");
     },
-    val2Str(v, sheetName) {
+    val2Str(v: any, sheetName: string) {
       return v
         ? v instanceof Range
           ? this.range2var(v, sheetName)
-          : v.toString()
+          : v.tostring()
         : "nothing";
     },
-    vals2Str(vals: Array, sheetName: String) {
+    vals2Str(vals: any[], sheetName: string) {
       return (
         "[" +
         vals
@@ -99,7 +99,7 @@ const langs = {
         "]"
       );
     },
-    ab2Var(sheet: String, address: String) {
+    ab2Var(sheet: string, address: string) {
       if (address.includes("!")) {
         return this.toSnakeCase(address)
           .replace(/:/g, "")
@@ -112,10 +112,10 @@ const langs = {
         address.toLowerCase().replace(/:/g, "").replace(/\$/g, "")
       );
     },
-    range2var(r: Range, sheetName: String) {
+    range2var(r: Range, sheetName: string) {
       return this.ab2Var(sheetName, r.printAddress(true));
     },
-    printFormula(f: Formula, r: Range, sheet: String) {
+    printFormula(f: Formula, r: Range, sheet: string) {
       let vars = [];
       let str = "";
 
@@ -154,7 +154,7 @@ const langs = {
 
       return { text: str, vars };
     },
-    getValVar(v, sheetVals: Map) {
+    getValVar(v, sheetVals: Map<string, any>) {
       const vals = sheetVals.get(v.sheet);
       const depVars = [];
 
@@ -217,8 +217,8 @@ const langs = {
         sorted.push({ lhs: k, rhs: v.text });
       }
     },
-    print(ast) {
-      const sheetVals = new Map();
+    print(ast: Workbook) {
+      const sheetVals: Map<string, any[][]> = new Map();
       const exprs = new Map();
       ast.sheets.forEach((sheet) => {
         sheetVals.set(sheet.name, sheet.values);
