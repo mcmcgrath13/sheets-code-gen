@@ -29,7 +29,7 @@ const ALPHABET = [
 
 // get an array of indexes of the given length
 const utils = {
-  range(length) {
+  range(length: number) {
     return [...Array(length).keys()];
   },
   findRangeBelow(range: Range, ranges: Range[]): number {
@@ -51,7 +51,7 @@ const utils = {
 
 const langs = {
   gs: {
-    print(ast) {
+    print(ast: Workbook) {
       return ast.sheets
         .map((sheet) => {
           return (
@@ -65,7 +65,7 @@ const langs = {
     },
   },
   ast: {
-    print(ast) {
+    print(ast: Workbook) {
       return JSON.stringify(ast);
     },
   },
@@ -149,8 +149,8 @@ const langs = {
 
       return str;
     },
-    print(ast) {
-      return ast.sheets
+    print(ast: Workbook) {
+      return "using SpreadsheetFormulas\n\n" + ast.sheets
         .map((sheet) => {
           const valArrName = this.toSnakeCase(sheet.name) + "_vals";
           const valExpr = valArrName + " = " + this.sheetVals2Arr(sheet) + "\n";
