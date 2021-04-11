@@ -41,7 +41,7 @@ const utils = {
       );
     });
   },
-  getAlpha(num, str) {
+  getAlpha(num: number, str?: string): string {
     if (num < 0) return str;
     const idx = (num - 1) % ALPHABET.length;
     let s = str ? ALPHABET[idx] + str : ALPHABET[idx];

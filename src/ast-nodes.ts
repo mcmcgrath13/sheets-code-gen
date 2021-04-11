@@ -2,7 +2,11 @@ const DEFAULT_NUMBER_FORMAT = "0.###############";
 
 // build out classes for ast nodes here or maybe just use type script
 class Workbook {
-  constructor(ss: SpreadsheetApp.Spreadsheet) {
+	name: string;
+	url: string;
+	sheets: Sheet[];
+
+  constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet) {
     this.name = ss.getName();
     this.url = ss.getUrl();
     this.sheets = [];
@@ -17,7 +21,13 @@ class Workbook {
 }
 
 class Sheet {
-  constructor(sheet: SpreadsheetApp.Sheet) {
+	name: string;
+	values: any[][];
+	numRows: number;
+	numColumns: number;
+	ranges: Range[];
+
+  constructor(sheet: GoogleAppsScript.Spreadsheet.Sheet) {
     this.name = sheet.getName();
     this.values = sheet.getDataRange().getValues(); // TODO: how to handle values which are the result of a formula - leave in? reference formula? reference range?
     this.numRows = sheet.getLastRow();
@@ -55,7 +65,16 @@ class Sheet {
 }
 
 class Range {
-  constructor(range: SpreadsheetApp.Range) {
+	row: number;
+	column: number;
+	numRows: number;
+	numColumns: number;
+	formula: Formula;
+	format: string;
+	name: string;
+	note: string;
+
+  constructor(range: GoogleAppsScript.Spreadsheet.Range) {
     this.row = range.getRow();
     this.column = range.getColumn();
     this.numRows = 1;
@@ -101,13 +120,13 @@ class Range {
     }
   }
 
-  print(ab: ?boolean) {
+  print(ab?: boolean) {
     return this.formula.print()
       ? this.formula.print(ab, this.row, this.column)
       : this.format;
   }
 
-  printAddress(ab: ?boolean) {
+  printAddress(ab?: boolean) {
     const format = (row, column) => {
       if (ab) {
         return utils.getAlpha(column) + row;
@@ -128,12 +147,17 @@ class Range {
 }
 
 interface FormulaToken {
-  type: String;
-  subtype: String;
-  value: String;
+  type: string;
+  subtype: string;
+  value: string;
 }
 
+type Arg = Formula | RangeReference | TokenValue;
+
 class Formula {
+	head: string;
+	args: Arg[];
+
   constructor(formulaTokens: FormulaToken[], head: FormulaToken) {
     this.head = head.value === "" ? head.type : head.value.toUpperCase();
     this.args = [];
@@ -146,12 +170,12 @@ class Formula {
       } else if (token.subtype === "range") {
         this.args.push(new RangeReference(token.value));
       } else {
-        this.args.push(token.value);
+        this.args.push(new TokenValue(token.value));
       }
     }
   }
 
-  print(ab: ?boolean, row: ?number, column: ?number) {
+  print(ab?: boolean, row?: number, column?: number) {
     let str = "";
 
     if (this.head !== "__TOP__" && this.head !== "subexpression") {
@@ -163,7 +187,7 @@ class Formula {
 
     str += this.args
       .map((arg) => {
-        return arg["print"] ? arg.print(ab, row, column) : arg;
+        return arg.print(ab, row, column);
       })
       .join("");
 
@@ -175,14 +199,30 @@ class Formula {
   }
 }
 
+class TokenValue {
+	value: string;
+
+	constructor(v: string) {
+		this.value = v;
+	}
+
+	print() {
+		return this.value;
+	}
+}
+
 interface RangeMatch {
-  row: String | undefined;
-  column: String | undefined;
-  sheet: String | undefined;
+  row?: string;
+  column?: string;
+  sheet?: string;
 }
 
 class RangeReference {
-  constructor(r1c1: String) {
+	sheet: string;
+	start: CellReference;
+	stop: CellReference;
+
+  constructor(r1c1: string) {
     let re = /^(?:(?<sheet>.*)!)?(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
     let matches = r1c1.split(":").map((r) => r.match(re));
     this.sheet = matches[0].groups.sheet;
@@ -198,7 +238,7 @@ class RangeReference {
     return this.start === this.stop;
   }
 
-  print(ab: ?boolean, row: ?number, column: ?number) {
+  print(ab?: boolean, row?: number, column?: number) {
     let str = this.sheet ? `${this.sheet}!` : "";
     str += this.isCell()
       ? this.start.print(ab, row, column)
@@ -212,8 +252,10 @@ class RangeReference {
 }
 
 class CellReference {
+	row: CellAddress;
+	column: CellAddress;
+
   constructor(match: RangeMatch) {
-    let re = /^\[(?<val>\-?[0-9]+)\]$/;
     this.row = new CellAddress(match.row);
     this.column = new CellAddress(match.column);
   }
@@ -226,7 +268,7 @@ class CellReference {
     return this.column.isEmpty();
   }
 
-  print(ab: ?boolean, row, column) {
+  print(ab?: boolean, row?: number, column?: number) {
     if (ab) {
       return `${this.column.printAB(column, false)}${this.row.printAB(
         row,
@@ -239,7 +281,10 @@ class CellReference {
 }
 
 class CellAddress {
-  constructor(str: String | undefined) {
+	isRelative: boolean;
+	value: number;
+
+  constructor(str?: string) {
     if (!str) {
       this.isRelative = false;
       this.value = 0;
@@ -257,11 +302,11 @@ class CellAddress {
     }
   }
 
-  isEmpty() {
+  isEmpty(): boolean {
     return this.value === 0 && !this.isRelative;
   }
 
-  print(prefix) {
+  print(prefix: string) {
     if (this.isEmpty()) {
       return "";
     } else if (this.isRelative) {
@@ -271,7 +316,7 @@ class CellAddress {
     }
   }
 
-  printAB(anchor: number, isRow) {
+  printAB(anchor: number, isRow: boolean): string {
     if (this.isEmpty()) return "";
     let str = this.isRelative ? "" : "$";
     let val = this.isRelative ? this.value + anchor : this.value;
