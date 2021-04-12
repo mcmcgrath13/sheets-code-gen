@@ -80,6 +80,7 @@
             <pre><code id="generated-code"></code></pre>
           </div>
         </div>
+        <button class="blue" id="copy-text">Copy text</button>
       </form>
     </div>
 
@@ -102,6 +103,10 @@
        */
       $(function () {
         $("#run-code-gen").click(runCodeGen);
+      });
+
+      $(function () {
+        $("#copy-text").click(copyText);
       });
 
       /**
@@ -130,6 +135,14 @@
           })
           .withUserObject(this)
           .getGeneratedCode(lang);
+      }
+
+      function copyText() {
+        var $temp = $("<textarea>");
+        $("body").append($temp);
+        $temp.val($("#generated-code").text()).select();
+        document.execCommand("copy");
+        $temp.remove();
       }
 
       /**

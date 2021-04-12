@@ -80,17 +80,22 @@ const langs = {
     },
   },
   jl: {
-    toSnakeCase(str: string) {
+    toSnakeCase(str: string): string {
       return str.toLowerCase().replace(/\W/g, "_");
     },
-    val2Str(v: any, sheetName: string) {
-      return v
-        ? v instanceof Range
-          ? this.range2var(v, sheetName)
-          : v.tostring()
-        : "nothing";
+    getVal(v: any): string {
+      if (v === "") {
+        return "nothing";
+			} else if (typeof v === "string" || v instanceof String) {
+        return `"${v}"`;
+      } else {
+        return v.toString();
+      }
     },
-    vals2Str(vals: any[], sheetName: string) {
+    val2Str(v: any, sheetName: string): string {
+      return v instanceof Range ? this.range2var(v, sheetName) : v;
+    },
+    vals2Str(vals: any[], sheetName: string): string {
       return (
         "[" +
         vals
@@ -99,7 +104,7 @@ const langs = {
         "]"
       );
     },
-    ab2Var(sheet: string, address: string) {
+    ab2Var(sheet: string, address: string): string {
       if (address.includes("!")) {
         return this.toSnakeCase(address)
           .replace(/:/g, "")
@@ -112,10 +117,15 @@ const langs = {
         address.toLowerCase().replace(/:/g, "").replace(/\$/g, "")
       );
     },
-    range2var(r: Range, sheetName: string) {
+    range2var(r: Range, sheetName: string): string {
       return this.ab2Var(sheetName, r.printAddress(true));
     },
-    printFormula(f: Formula, r: Range, sheet: string) {
+    inds2var(i: number, j: number, sheetName: string): string {
+      return `${this.toSnakeCase(sheetName)}_${utils
+        .getAlpha(j + 1)
+        .toLowerCase()}${i + 1}`;
+    },
+    printFormula(f: Formula, r: Range, sheet: string): ValVar {
       let vars = [];
       let str = "";
 
@@ -143,7 +153,7 @@ const langs = {
             });
             return varName;
           } else {
-            return arg;
+            return arg.value;
           }
         })
         .join("");
@@ -154,9 +164,9 @@ const langs = {
 
       return { text: str, vars };
     },
-    getValVar(v, sheetVals: Map<string, any>) {
+    getValVar(v: DepVar, sheetVals: Map<string, any[][]>): ValVar {
       const vals = sheetVals.get(v.sheet);
-      const depVars = [];
+      const depVars: DepVar[] = [];
 
       // scalar
       if (
@@ -169,8 +179,10 @@ const langs = {
             sheet: v.sheet,
             var: this.range2var(varVal, v.sheet),
           });
+          return { text: this.val2Str(varVal), vars: depVars };
+        } else {
+          return { text: this.getVal(varVal), vars: depVars };
         }
-        return { text: this.val2Str(varVal, v.sheet), vars: depVars };
       }
 
       const varVals = [];
@@ -186,20 +198,33 @@ const langs = {
           j++
         ) {
           const varVal = vals[i][j];
-          rowVals.push(varVal);
           if (varVal instanceof Range) {
             depVars.push({
               sheet: v.sheet,
               var: this.range2var(varVal, v.sheet),
             });
+          } else {
+            depVars.push({
+              sheet: v.sheet,
+              var: this.inds2var(i, j, v.sheet),
+              rowExtent: [i + 1, i + 1],
+              columnExtent: [j + 1, j + 1],
+            });
           }
+          rowVals.push(depVars.slice(-1)[0].var);
         }
         varVals.push(rowVals);
       }
 
       return { text: this.vals2Str(varVals, v.sheet), vars: depVars };
     },
-    addToSorted(sorted, v, k, m, sheetVals) {
+    addToSorted(
+      sorted: Expression[],
+      v: ValVar,
+      k: string,
+      m: Map<string, ValVar>,
+      sheetVals: Map<string, any[][]>
+    ) {
       Logger.log(v);
       v.vars.forEach((vr) => {
         const varName = vr.var;
@@ -217,9 +242,9 @@ const langs = {
         sorted.push({ lhs: k, rhs: v.text });
       }
     },
-    print(ast: Workbook) {
+    print(ast: Workbook): string {
       const sheetVals: Map<string, any[][]> = new Map();
-      const exprs = new Map();
+      const exprs: Map<string, ValVar> = new Map();
       ast.sheets.forEach((sheet) => {
         sheetVals.set(sheet.name, sheet.values);
 
@@ -233,7 +258,7 @@ const langs = {
           );
       });
 
-      const sorted = [];
+      const sorted: Expression[] = [];
 
       exprs.forEach((v, k, m) => {
         this.addToSorted(sorted, v, k, m, sheetVals);
@@ -241,7 +266,27 @@ const langs = {
 
       Logger.log(sorted);
 
-      return sorted.map((s) => s.lhs + " = " + s.rhs).join("\n");
+      return (
+        "using SpreadsheetFunctions\n\n" +
+        sorted.map((s) => s.lhs + " = " + s.rhs).join("\n")
+      );
     },
   },
 };
+
+interface Expression {
+  lhs: string;
+  rhs: string;
+}
+
+interface DepVar {
+  sheet: string;
+  var: string;
+  rowExtent?: number[];
+  columnExtent?: number[];
+}
+
+interface ValVar {
+  text: string;
+  vars: DepVar[];
+}

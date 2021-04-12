@@ -2,9 +2,9 @@ const DEFAULT_NUMBER_FORMAT = "0.###############";
 
 // build out classes for ast nodes here or maybe just use type script
 class Workbook {
-	name: string;
-	url: string;
-	sheets: Sheet[];
+  name: string;
+  url: string;
+  sheets: Sheet[];
 
   constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet) {
     this.name = ss.getName();
@@ -21,11 +21,11 @@ class Workbook {
 }
 
 class Sheet {
-	name: string;
-	values: any[][];
-	numRows: number;
-	numColumns: number;
-	ranges: Range[];
+  name: string;
+  values: any[][];
+  numRows: number;
+  numColumns: number;
+  ranges: Range[];
 
   constructor(sheet: GoogleAppsScript.Spreadsheet.Sheet) {
     this.name = sheet.getName();
@@ -75,14 +75,14 @@ class Sheet {
 }
 
 class Range {
-	row: number;
-	column: number;
-	numRows: number;
-	numColumns: number;
-	formula: Formula;
-	format: string;
-	name: string;
-	note: string;
+  row: number;
+  column: number;
+  numRows: number;
+  numColumns: number;
+  formula: Formula;
+  format: string;
+  name: string;
+  note: string;
 
   constructor(range: GoogleAppsScript.Spreadsheet.Range) {
     this.row = range.getRow();
@@ -137,7 +137,7 @@ class Range {
   }
 
   printAddress(ab?: boolean) {
-    const format = (row, column) => {
+    const format = (row: number, column: number) => {
       if (ab) {
         return utils.getAlpha(column) + row;
       } else {
@@ -165,8 +165,8 @@ interface FormulaToken {
 type Arg = Formula | RangeReference | TokenValue;
 
 class Formula {
-	head: string;
-	args: Arg[];
+  head: string;
+  args: Arg[];
 
   constructor(formulaTokens: FormulaToken[], head: FormulaToken) {
     this.head = head.value === "" ? head.type : head.value.toUpperCase();
@@ -188,6 +188,7 @@ class Formula {
   isEmpty() {
     return this.head === "__TOP__" && this.args.length === 0;
   }
+
   print(ab?: boolean, row?: number, column?: number) {
     let str = "";
 
@@ -213,15 +214,15 @@ class Formula {
 }
 
 class TokenValue {
-	value: string;
+  value: string;
 
-	constructor(v: string) {
-		this.value = v;
-	}
+  constructor(v: string) {
+    this.value = v;
+  }
 
-	print() {
-		return this.value;
-	}
+  print() {
+    return this.value;
+  }
 }
 
 interface RangeMatch {
@@ -231,9 +232,9 @@ interface RangeMatch {
 }
 
 class RangeReference {
-	sheet: string;
-	start: CellReference;
-	stop: CellReference;
+  sheet: string;
+  start: CellReference;
+  stop: CellReference;
 
   constructor(r1c1: string) {
     let re = /^(?:(?<sheet>.*)!)?(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
@@ -251,7 +252,7 @@ class RangeReference {
     return this.start === this.stop;
   }
 
-  rowExtent(start) {
+  rowExtent(start: number): number[] {
     if (this.start.isOnlyColumn()) {
       return [1, Number.MAX_VALUE];
     }
@@ -261,7 +262,7 @@ class RangeReference {
     ];
   }
 
-  columnExtent(start) {
+  columnExtent(start: number): number[] {
     if (this.start.isOnlyRow()) {
       return [1, Number.MAX_VALUE];
     }
@@ -285,8 +286,8 @@ class RangeReference {
 }
 
 class CellReference {
-	row: CellAddress;
-	column: CellAddress;
+  row: CellAddress;
+  column: CellAddress;
 
   constructor(match: RangeMatch) {
     this.row = new CellAddress(match.row);
@@ -314,8 +315,8 @@ class CellReference {
 }
 
 class CellAddress {
-	isRelative: boolean;
-	value: number;
+  isRelative: boolean;
+  value: number;
 
   constructor(str?: string) {
     if (!str) {

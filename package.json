@@ -6,6 +6,7 @@
   "license": "MIT",
   "dependencies": {
     "@google/clasp": "^2.3.0",
-    "@types/google-apps-script": "^1.0.31"
+    "@types/google-apps-script": "^1.0.31",
+    "prettier": "^2.2.1"
   }
 }
