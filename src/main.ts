@@ -49,19 +49,20 @@ function showSidebar() {
  * @param {string} lang The two-letter short for the target language.
  * @return {Object} Object containing the result of the code generation.
  */
-const getGeneratedCode = (lang: string) => {
+const getGeneratedCode = (lang: string, activeOnly: boolean, tabularData: boolean) => {
   Logger.log(lang);
-  let ast = getAST();
+  Logger.log(activeOnly);
+  let ast = getAST(activeOnly, tabularData);
   let code = generateCode(ast, lang);
   return {
     code: code,
   };
 };
 
-const getAST = () => {
+const getAST = (activeOnly: boolean, tabularData: boolean) => {
   // read the spreadsheet, parse
   let ss = SpreadsheetApp.getActiveSpreadsheet();
-  let ast = new Workbook(ss);
+  let ast = new Workbook(ss, activeOnly, tabularData);
   return ast;
 };
 

@@ -6,16 +6,20 @@ class Workbook {
   url: string;
   sheets: Sheet[];
 
-  constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet) {
+  constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet, activeOnly: boolean, tabularData: boolean) {
     this.name = ss.getName();
     this.url = ss.getUrl();
     this.sheets = [];
 
-    const sheets = ss.getSheets();
-    for (const i in sheets) {
-      let s = sheets[i];
-      let sheet = new Sheet(s);
-      this.sheets.push(sheet);
+    if (activeOnly) {
+      this.sheets.push(new Sheet(ss.getActiveSheet(), tabularData));
+    } else {
+      const sheets = ss.getSheets();
+      for (const i in sheets) {
+        let s = sheets[i];
+        let sheet = new Sheet(s, tabularData);
+        this.sheets.push(sheet);
+      }
     }
   }
 }
@@ -26,8 +30,9 @@ class Sheet {
   numRows: number;
   numColumns: number;
   ranges: Range[];
+  table: Table;
 
-  constructor(sheet: GoogleAppsScript.Spreadsheet.Sheet) {
+  constructor(sheet: GoogleAppsScript.Spreadsheet.Sheet, tabularData: boolean) {
     this.name = sheet.getName();
     this.values = sheet.getDataRange().getValues();
     this.numRows = sheet.getLastRow();
@@ -48,6 +53,10 @@ class Sheet {
           }
         }
       }
+    }
+
+    if (tabularData) {
+      this.table = new Table(this.name, this.values);
     }
   }
 
@@ -156,6 +165,62 @@ class Range {
   }
 }
 
+class Table {
+  range: RangeReference;
+  headers: string[];
+  dataColumns: number[];
+  derivedColumns: number[];
+
+  constructor(sheet: string, values: any[][]) {
+    if (values[0][0] == '' && values[0][1] == '') {
+      throw 'Table header missing: must have header in the first row, only first column can be blank.'
+    }
+    this.headers = [];
+
+    let j = 0;
+    let numRows = Number.MAX_SAFE_INTEGER;
+    while (j < values[0].length && typeof(values[0][j]) === 'string') {
+      let header = values[0][j];
+      if (header === '') {
+        if (j === 0) {
+          header = 'row_id';
+        } else {
+          break;
+        }
+      }
+      let col_type = typeof values[1][j];
+      let i = 2
+      let isDerived = false;
+      while (typeof values[i][j] === col_type) {
+        if (values[i][j] instanceof Range) {
+          isDerived = true;
+          // formula must match
+          if (values[i][j].print() !== values[i-1][j].print()) {
+            break;
+          }
+        }
+        i++;
+        if (i >= values.length) break;
+      }
+      if (numRows !== Number.MAX_SAFE_INTEGER && numRows !== i) {
+        break;
+      }
+      numRows = Math.min(i, numRows);
+      j++;
+      this.headers.push(header);
+      if (isDerived) {
+        this.derivedColumns.push(j);
+      } else {
+        this.dataColumns.push(j);
+      }
+    }
+
+    let start = new CellReference({ row: "1", column: "1"});
+    let stop = new CellReference({ row: numRows.toString(), column: j.toString()});
+    this.range = new RangeReference(sheet, start, stop)
+  }
+}
+
 interface FormulaToken {
   type: string;
   subtype: string;
@@ -178,7 +243,7 @@ class Formula {
       } else if (token.subtype === "stop") {
         break;
       } else if (token.subtype === "range") {
-        this.args.push(new RangeReference(token.value));
+        this.args.push(RangeReference.fromR1C1(token.value));
       } else {
         this.args.push(new TokenValue(token.value));
       }
@@ -236,16 +301,24 @@ class RangeReference {
   start: CellReference;
   stop: CellReference;
 
-  constructor(r1c1: string) {
+  constructor(sheet: string, start: CellReference, stop: CellReference) {
+    this.sheet = sheet;
+    this.start = start;
+    this.stop = stop
+  }
+
+  static fromR1C1(r1c1: string) {
     let re = /^(?:(?<sheet>.*)!)?(?:R(?<row>[0-9\-\[\]]+))?(?:C(?<column>[0-9\-\[\]]+))?$/;
     let matches = r1c1.split(":").map((r) => r.match(re));
-    this.sheet = matches[0].groups.sheet;
-    this.start = new CellReference(matches[0].groups);
+    const sheet = matches[0].groups.sheet;
+    const start = new CellReference(matches[0].groups);
+    let stop;
     if (matches.length === 2) {
-      this.stop = new CellReference(matches[1].groups);
+      stop = new CellReference(matches[1].groups);
     } else {
-      this.stop = this.start;
+      stop = start;
     }
+    return new RangeReference(sheet, start, stop);
   }
 
   isCell() {

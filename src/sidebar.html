@@ -70,6 +70,14 @@
               <input type="radio" name="lang" id="radio-lang-ast" value="ast" />
               <label for="radio-origin-ast">AST</label>
             </div>
+            <div>
+              <input type="checkbox" name="active-sheet" id="active-sheet" />
+              <label for="active-sheet">This Sheet Only</label>
+            </div>
+            <div>
+              <input type="checkbox" name="detect-table" id="detect-table" />
+              <label for="detect-table">Data is Tabular</label>
+            </div>
           </div>
         </div>
         <div class="block" id="button-bar">
@@ -117,6 +125,8 @@
         this.disabled = true;
         $("#error").remove();
         var lang = $("input[name=lang]:checked").val();
+        var activeOnly = $('#active-sheet').is(":checked");
+        var tabularData = $('#detect-table').is(":checked");
         google.script.run
           .withSuccessHandler(function (generatedCode, element) {
             let innerText = generatedCode.code;
@@ -134,7 +144,7 @@
             element.disabled = false;
           })
           .withUserObject(this)
-          .getGeneratedCode(lang);
+          .getGeneratedCode(lang, activeOnly, tabularData);
       }
 
       function copyText() {
