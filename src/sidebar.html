@@ -125,8 +125,8 @@
         this.disabled = true;
         $("#error").remove();
         var lang = $("input[name=lang]:checked").val();
-        var activeOnly = $('#active-sheet').is(":checked");
-        var tabularData = $('#detect-table').is(":checked");
+        var activeOnly = $("#active-sheet").is(":checked");
+        var tabularData = $("#detect-table").is(":checked");
         google.script.run
           .withSuccessHandler(function (generatedCode, element) {
             let innerText = generatedCode.code;

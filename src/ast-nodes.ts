@@ -6,7 +6,11 @@ class Workbook {
   url: string;
   sheets: Sheet[];
 
-  constructor(ss: GoogleAppsScript.Spreadsheet.Spreadsheet, activeOnly: boolean, tabularData: boolean) {
+  constructor(
+    ss: GoogleAppsScript.Spreadsheet.Spreadsheet,
+    activeOnly: boolean,
+    tabularData: boolean
+  ) {
     this.name = ss.getName();
     this.url = ss.getUrl();
     this.sheets = [];
@@ -172,30 +176,32 @@ class Table {
   derivedColumns: number[];
 
   constructor(sheet: string, values: any[][]) {
-    if (values[0][0] == '' && values[0][1] == '') {
-      throw 'Table header missing: must have header in the first row, only first column can be blank.'
+    if (values[0][0] == "" && values[0][1] == "") {
+      throw "Table header missing: must have header in the first row, only first column can be blank.";
     }
     this.headers = [];
+    this.dataColumns = [];
+    this.derivedColumns = [];
 
     let j = 0;
     let numRows = Number.MAX_SAFE_INTEGER;
-    while (j < values[0].length && typeof(values[0][j]) === 'string') {
+    while (j < values[0].length && typeof values[0][j] === "string") {
       let header = values[0][j];
-      if (header === '') {
+      if (header === "") {
         if (j === 0) {
-          header = 'row_id';
+          header = "row_id";
         } else {
           break;
         }
       }
       let col_type = typeof values[1][j];
-      let i = 2
+      let i = 2;
       let isDerived = false;
       while (typeof values[i][j] === col_type) {
         if (values[i][j] instanceof Range) {
           isDerived = true;
           // formula must match
-          if (values[i][j].print() !== values[i-1][j].print()) {
+          if (values[i][j].print() !== values[i - 1][j].print()) {
             break;
           }
         }
@@ -206,18 +212,53 @@ class Table {
         break;
       }
       numRows = Math.min(i, numRows);
-      j++;
       this.headers.push(header);
       if (isDerived) {
         this.derivedColumns.push(j);
       } else {
         this.dataColumns.push(j);
       }
+      j++;
     }
 
-    let start = new CellReference({ row: "1", column: "1"});
-    let stop = new CellReference({ row: numRows.toString(), column: j.toString()});
-    this.range = new RangeReference(sheet, start, stop)
+    let start = new CellReference({ row: "2", column: "1" });
+    let stop = new CellReference({
+      row: numRows.toString(),
+      column: j.toString(),
+    });
+    this.range = new RangeReference(sheet, start, stop);
+  }
+
+  containsRangeRef(ref: RangeReference, r: Range, sheet: string): boolean {
+    if (
+      ref.sheet &&
+      this.range.sheet !== ref.sheet &&
+      sheet !== this.range.sheet
+    ) {
+      return false;
+    }
+
+    let rowExtent = ref.rowExtent(r.row);
+    let columnExtent = ref.columnExtent(r.column);
+    if (
+      rowExtent[1] <= this.range.stop.row.value &&
+      columnExtent[1] <= this.range.stop.column.value
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  containsRange(r: Range): boolean {
+    if (
+      r.row <= this.range.stop.row.value &&
+      r.column <= this.range.stop.column.value
+    ) {
+      return true;
+    } else {
+      return false;
+    }
   }
 }
 
@@ -304,7 +345,7 @@ class RangeReference {
   constructor(sheet: string, start: CellReference, stop: CellReference) {
     this.sheet = sheet;
     this.start = start;
-    this.stop = stop
+    this.stop = stop;
   }
 
   static fromR1C1(r1c1: string) {

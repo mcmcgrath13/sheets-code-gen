@@ -86,7 +86,7 @@ const langs = {
     getVal(v: any): string {
       if (v === "") {
         return "nothing";
-			} else if (typeof v === "string" || v instanceof String) {
+      } else if (typeof v === "string" || v instanceof String) {
         return `"${v}"`;
       } else {
         return v.toString();
@@ -120,6 +120,14 @@ const langs = {
     range2var(r: Range, sheetName: string): string {
       return this.ab2Var(sheetName, r.printAddress(true));
     },
+    rangeRef2var(
+      r: RangeReference,
+      row: number,
+      column: number,
+      sheet: string
+    ): string {
+      return this.ab2Var(sheet, r.print(true, row, column));
+    },
     inds2var(i: number, j: number, sheetName: string): string {
       return `${this.toSnakeCase(sheetName)}_${utils
         .getAlpha(j + 1)
@@ -143,14 +151,93 @@ const langs = {
             vars.push(...v);
             return text;
           } else if (arg instanceof RangeReference) {
-            let abRef = arg.print(true, r.row, r.column);
-            let varName = this.ab2Var(sheet, abRef);
+            let varName = this.rangeRef2var(arg, r.row, r.column, sheet);
             vars.push({
               var: varName,
               sheet: sheet,
               rowExtent: arg.rowExtent(r.row),
               columnExtent: arg.columnExtent(r.column),
             });
+            return varName;
+          } else {
+            return arg.value;
+          }
+        })
+        .join("");
+
+      if (f.head !== "__TOP__") {
+        str += ")";
+      }
+
+      return { text: str, vars };
+    },
+    printDfFormula(f: Formula, r: Range, sheet: string, table: Table): ValVar {
+      let vars = [];
+      let str = "";
+
+      if (f.head !== "__TOP__" && f.head !== "subexpression") {
+        str += f.head;
+      }
+      if (f.head !== "__TOP__") {
+        str += "(";
+      }
+
+      str += f.args
+        .map((arg) => {
+          if (arg instanceof Formula) {
+            const { text, vars: v } = this.printDfFormula(arg, r, sheet, table);
+            vars.push(...v);
+            return text;
+          } else if (arg instanceof RangeReference) {
+            let varName;
+            const columnExtent = arg.columnExtent(r.column);
+            const rowExtent = arg.rowExtent(r.row);
+            if (table.containsRangeRef(arg, r, sheet)) {
+              const tableRowExtent = table.range.rowExtent(0);
+              if (columnExtent[0] === columnExtent[1]) {
+                let headerIdx = table.headers[columnExtent[0] - 1];
+                if (
+                  rowExtent[0] === tableRowExtent[0] &&
+                  rowExtent[1] === tableRowExtent[1]
+                ) {
+                  varName = `df.${headerIdx}`;
+                } else if (
+                  rowExtent[0] === rowExtent[1] &&
+                  rowExtent[0] === tableRowExtent[0]
+                ) {
+                  varName = `row.${headerIdx}`;
+                } else {
+                  throw "Multi row (but not column) dataframe indexing not implemented";
+                }
+              } else {
+                let headers = table.headers.filter(
+                  (h, i) => i >= columnExtent[0] - 1 && i <= columnExtent[1] - 1
+                );
+                let headersIdx = `[${headers.map((h) => `:{h}`).join(", ")}]`;
+                if (
+                  rowExtent[0] === tableRowExtent[0] &&
+                  rowExtent[1] === tableRowExtent[1]
+                ) {
+                  varName = `df[!, ${headersIdx}]`;
+                } else if (
+                  rowExtent[0] === rowExtent[1] &&
+                  rowExtent[0] === tableRowExtent[0]
+                ) {
+                  varName = `row[!, ${headersIdx}]`;
+                } else {
+                  throw "Multi row (but not column) dataframe indexing not implemented";
+                }
+              }
+            } else {
+              varName = this.rangeRef2var(arg, r.row, r.column, sheet);
+              vars.push({
+                var: varName,
+                sheet: sheet,
+                rowExtent,
+                columnExtent,
+              });
+            }
+
             return varName;
           } else {
             return arg.value;
@@ -218,6 +305,39 @@ const langs = {
 
       return { text: this.vals2Str(varVals, v.sheet), vars: depVars };
     },
+    dfExpr(table: Table, values: any[][], sheet: string) {
+      let text = "DataFrame([";
+      let dataCols = table.dataColumns.map((col) => {
+        return (
+          `[` +
+          values
+            .slice(1, table.range.stop.row.value)
+            .map((row) => this.getVal(row[col]))
+            .join(", ") +
+          "]"
+        );
+      });
+      text +=
+        dataCols.join(", ") +
+        "], [" +
+        table.dataColumns.map((col) => `:${table.headers[col]}`).join(", ") +
+        "])";
+
+      // TODO: add derived columns
+      let derivedCols = table.derivedColumns.map((col) => {
+        let r = values[1][col];
+        let dfFormula = this.printDfFormula(r.formula, r, sheet, table);
+        return {
+          text: `df.${table.headers[col]} = map(row -> ${dfFormula.text}, eachrow(df))`,
+          vars: dfFormula.vars,
+        };
+      });
+
+      text += "\n\n" + derivedCols.map((d) => d.text).join("\n");
+      let vars = derivedCols.reduce((acc, cur) => acc.concat(cur.vars), []);
+
+      return { text, vars };
+    },
     addToSorted(
       sorted: Expression[],
       v: ValVar,
@@ -245,17 +365,36 @@ const langs = {
     print(ast: Workbook): string {
       const sheetVals: Map<string, any[][]> = new Map();
       const exprs: Map<string, ValVar> = new Map();
+      let tabular = false;
+
       ast.sheets.forEach((sheet) => {
         sheetVals.set(sheet.name, sheet.values);
 
-        sheet.ranges
-          .filter((cell) => cell.formula.print() !== "")
-          .forEach((cell) =>
-            exprs.set(
-              this.range2var(cell, sheet.name),
-              this.printFormula(cell.formula, cell, sheet.name)
-            )
-          );
+        if (sheet.table) {
+          tabular = true;
+          let dfExpr = this.dfExpr(sheet.table, sheet.values, sheet.name);
+          exprs.set("df", dfExpr);
+
+          sheet.ranges
+            .filter((cell) => cell.formula.print() !== "")
+            .filter((cell) => !sheet.table.containsRange(cell))
+            .forEach((cell) =>
+              exprs.set(
+                this.range2var(cell, sheet.name),
+                this.printDfFormula(cell.formula, cell, sheet.name, sheet.table)
+              )
+            );
+          // TODO, add expr to mapping, intervene on ranges in getValVar to see if it matches a column and substitute the column reference
+        } else {
+          sheet.ranges
+            .filter((cell) => cell.formula.print() !== "")
+            .forEach((cell) =>
+              exprs.set(
+                this.range2var(cell, sheet.name),
+                this.printFormula(cell.formula, cell, sheet.name, sheet.table)
+              )
+            );
+        }
       });
 
       const sorted: Expression[] = [];
@@ -264,10 +403,10 @@ const langs = {
         this.addToSorted(sorted, v, k, m, sheetVals);
       });
 
-      Logger.log(sorted);
-
       return (
-        "using SpreadsheetFunctions\n\n" +
+        "using SpreadsheetFunctions\n" +
+        (tabular ? "using DataFrames\n" : "") +
+        "\n" +
         sorted.map((s) => s.lhs + " = " + s.rhs).join("\n")
       );
     },

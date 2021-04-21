@@ -49,7 +49,11 @@ function showSidebar() {
  * @param {string} lang The two-letter short for the target language.
  * @return {Object} Object containing the result of the code generation.
  */
-const getGeneratedCode = (lang: string, activeOnly: boolean, tabularData: boolean) => {
+const getGeneratedCode = (
+  lang: string,
+  activeOnly: boolean,
+  tabularData: boolean
+) => {
   Logger.log(lang);
   Logger.log(activeOnly);
   let ast = getAST(activeOnly, tabularData);
