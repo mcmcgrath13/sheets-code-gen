@@ -27,11 +27,13 @@ const ALPHABET = [
   "Z",
 ];
 
-// get an array of indexes of the given length
 const utils = {
+  // get an array of indexes of the given length
   range(length: number) {
     return [...Array(length).keys()];
   },
+
+  // find the range adjacent/below the given one if it exists
   findRangeBelow(range: Range, ranges: Range[]): number {
     return ranges.findIndex((r) => {
       return (
@@ -41,6 +43,8 @@ const utils = {
       );
     });
   },
+
+  // find the range adjacent/to the right of the given one if it exists
   findRangeRight(range: Range, ranges: Range[]): number {
     return ranges.findIndex((r) => {
       return (
@@ -50,6 +54,8 @@ const utils = {
       );
     });
   },
+
+  // given a (column) number, get the alphabetized version
   getAlpha(num: number, str?: string): string {
     if (num < 0) return str;
     const idx = (num - 1) % ALPHABET.length;
@@ -58,7 +64,9 @@ const utils = {
   },
 };
 
+// languages with implentations of code generation, `print` is required method
 const langs = {
+  // google sheets languge with range collapsing
   gs: {
     print(ast: Workbook) {
       return ast.sheets
@@ -74,15 +82,22 @@ const langs = {
         .join("\n");
     },
   },
+
+  // raw AST as JSON
   ast: {
     print(ast: Workbook) {
       return JSON.stringify(ast);
     },
   },
+
+  // Julia
   jl: {
+    // make a strink snake case
     toSnakeCase(str: string): string {
       return str.toLowerCase().replace(/\W/g, "_");
     },
+
+    // translate a google sheets cell value into a Julia value
     getVal(v: any): string {
       if (v === "") {
         return "nothing";
@@ -92,9 +107,13 @@ const langs = {
         return v.toString();
       }
     },
+
+    // given a google sheets cell value, get the variable name or Julia value
     val2Str(v: any, sheetName: string): string {
       return v instanceof Range ? this.range2var(v, sheetName) : v;
     },
+
+    // given an array of google sheets cell values, get the variable names or Julia values
     vals2Str(vals: any[], sheetName: string): string {
       return (
         "[" +
@@ -104,6 +123,8 @@ const langs = {
         "]"
       );
     },
+
+    // given an ab notation address, return the equivalent var name
     ab2Var(sheet: string, address: string): string {
       if (address.includes("!")) {
         return this.toSnakeCase(address)
@@ -117,9 +138,13 @@ const langs = {
         address.toLowerCase().replace(/:/g, "").replace(/\$/g, "")
       );
     },
+
+    // given a range, get the var name
     range2var(r: Range, sheetName: string): string {
       return this.ab2Var(sheetName, r.printAddress(true));
     },
+
+    // given a range reference, get the var name
     rangeRef2var(
       r: RangeReference,
       row: number,
@@ -128,11 +153,15 @@ const langs = {
     ): string {
       return this.ab2Var(sheet, r.print(true, row, column));
     },
+
+    // given a row and column index, get the var name
     inds2var(i: number, j: number, sheetName: string): string {
       return `${this.toSnakeCase(sheetName)}_${utils
         .getAlpha(j + 1)
         .toLowerCase()}${i + 1}`;
     },
+
+    // get the Julia representation of a formula as well as the variables referenced in it
     printFormula(f: Formula, r: Range, sheet: string): ValVar {
       let vars = [];
       let str = "";
@@ -171,7 +200,15 @@ const langs = {
 
       return { text: str, vars };
     },
-    printDfFormula(f: Formula, r: Range, sheet: string, table: Table): ValVar {
+
+    // If a table (dataframe) is in the sheet, get the Julia representation of a formula as well as the variables referenced in it
+    printDfFormula(
+      f: Formula,
+      r: Range,
+      sheet: string,
+      table: Table,
+      isDerived: boolean
+    ): ValVar {
       let vars = [];
       let str = "";
 
@@ -185,47 +222,84 @@ const langs = {
       str += f.args
         .map((arg) => {
           if (arg instanceof Formula) {
-            const { text, vars: v } = this.printDfFormula(arg, r, sheet, table);
+            const { text, vars: v } = this.printDfFormula(
+              arg,
+              r,
+              sheet,
+              table,
+              isDerived
+            );
             vars.push(...v);
             return text;
           } else if (arg instanceof RangeReference) {
             let varName;
             const columnExtent = arg.columnExtent(r.column);
             const rowExtent = arg.rowExtent(r.row);
-            if (table.containsRangeRef(arg, r, sheet)) {
+            if (
+              (!arg.sheet || arg.sheet === sheet) &&
+              table.containsRangeRef(arg, r, sheet)
+            ) {
               const tableRowExtent = table.range.rowExtent(0);
+              const dfVarName = `${this.toSnakeCase(sheet)}_table`;
               if (columnExtent[0] === columnExtent[1]) {
                 let headerIdx = table.headers[columnExtent[0] - 1];
                 if (
                   rowExtent[0] === tableRowExtent[0] &&
                   rowExtent[1] === tableRowExtent[1]
                 ) {
-                  varName = `df.${headerIdx}`;
+                  varName = `${dfVarName}.${headerIdx}`;
                 } else if (
                   rowExtent[0] === rowExtent[1] &&
                   rowExtent[0] === tableRowExtent[0]
                 ) {
-                  varName = `row.${headerIdx}`;
+                  if (isDerived) {
+                    varName = `row.${headerIdx}`;
+                  } else {
+                    varName = `${dfVarName}[${rowExtent[0]}, ${headerIdx}]`;
+                  }
                 } else {
-                  throw "Multi row (but not column) dataframe indexing not implemented";
+                  if (isDerived) {
+                    Logger.log(arg);
+                    Logger.log(r);
+                    Logger.log(sheet);
+                    throw "Multi row (but not column) dataframe indexing not implemented";
+                  } else {
+                    varName = `${dfVarName}[${rowExtent[0]}:${rowExtent[1]}, ${headerIdx}]`;
+                  }
                 }
               } else {
                 let headers = table.headers.filter(
                   (h, i) => i >= columnExtent[0] - 1 && i <= columnExtent[1] - 1
                 );
-                let headersIdx = `[${headers.map((h) => `:{h}`).join(", ")}]`;
+                let headersIdx;
+                if (headers.length === table.headers.length) {
+                  headersIdx = ":";
+                } else {
+                  headersIdx = `[${headers.map((h) => `:${h}`).join(", ")}]`;
+                }
                 if (
                   rowExtent[0] === tableRowExtent[0] &&
                   rowExtent[1] === tableRowExtent[1]
                 ) {
-                  varName = `df[!, ${headersIdx}]`;
+                  varName = `${dfVarName}[!, ${headersIdx}]`;
                 } else if (
                   rowExtent[0] === rowExtent[1] &&
                   rowExtent[0] === tableRowExtent[0]
                 ) {
-                  varName = `row[!, ${headersIdx}]`;
+                  if (isDerived) {
+                    varName = `row[!, ${headersIdx}]`;
+                  } else {
+                    varName = `${dfVarName}[${rowExtent[0]}, ${headersIdx}]`;
+                  }
                 } else {
-                  throw "Multi row (but not column) dataframe indexing not implemented";
+                  if (isDerived) {
+                    Logger.log(arg);
+                    Logger.log(r);
+                    Logger.log(sheet);
+                    throw "Multi row (but not column) dataframe indexing not implemented";
+                  } else {
+                    varName = `${dfVarName}[${rowExtent[0]}:${rowExtent[1]}, ${headersIdx}]`;
+                  }
                 }
               }
             } else {
@@ -251,6 +325,8 @@ const langs = {
 
       return { text: str, vars };
     },
+
+    // Given a DepVar (result of printFormula or printDfFormula), get the expression/value for that var
     getValVar(v: DepVar, sheetVals: Map<string, any[][]>): ValVar {
       const vals = sheetVals.get(v.sheet);
       const depVars: DepVar[] = [];
@@ -305,6 +381,8 @@ const langs = {
 
       return { text: this.vals2Str(varVals, v.sheet), vars: depVars };
     },
+
+    // given a table, construct the dataframe expression
     dfExpr(table: Table, values: any[][], sheet: string) {
       let text = "DataFrame([";
       let dataCols = table.dataColumns.map((col) => {
@@ -323,21 +401,23 @@ const langs = {
         table.dataColumns.map((col) => `:${table.headers[col]}`).join(", ") +
         "])";
 
-      // TODO: add derived columns
       let derivedCols = table.derivedColumns.map((col) => {
         let r = values[1][col];
-        let dfFormula = this.printDfFormula(r.formula, r, sheet, table);
+        let dfVar = `${this.toSnakeCase(sheet)}_table`;
+        let dfFormula = this.printDfFormula(r.formula, r, sheet, table, true);
         return {
-          text: `df.${table.headers[col]} = map(row -> ${dfFormula.text}, eachrow(df))`,
+          text: `${dfVar}.${table.headers[col]} = map(row -> ${dfFormula.text}, eachrow(${dfVar}))`,
           vars: dfFormula.vars,
         };
       });
 
-      text += "\n\n" + derivedCols.map((d) => d.text).join("\n");
+      text += "\n" + derivedCols.map((d) => d.text).join("\n");
       let vars = derivedCols.reduce((acc, cur) => acc.concat(cur.vars), []);
 
       return { text, vars };
     },
+
+    // Add an expression to the sorted array, but first add any expressions it depends on
     addToSorted(
       sorted: Expression[],
       v: ValVar,
@@ -362,18 +442,24 @@ const langs = {
         sorted.push({ lhs: k, rhs: v.text });
       }
     },
+
+    // generate Julia code for the AST, potentially using DataFrames if present and requested
     print(ast: Workbook): string {
       const sheetVals: Map<string, any[][]> = new Map();
       const exprs: Map<string, ValVar> = new Map();
       let tabular = false;
 
+      // collect all of the expressions in each sheet
       ast.sheets.forEach((sheet) => {
         sheetVals.set(sheet.name, sheet.values);
 
         if (sheet.table) {
           tabular = true;
+          sheet.table.headers = sheet.table.headers.map((h) =>
+            this.toSnakeCase(h)
+          );
           let dfExpr = this.dfExpr(sheet.table, sheet.values, sheet.name);
-          exprs.set("df", dfExpr);
+          exprs.set(`${this.toSnakeCase(sheet.name)}_table`, dfExpr);
 
           sheet.ranges
             .filter((cell) => cell.formula.print() !== "")
@@ -381,10 +467,15 @@ const langs = {
             .forEach((cell) =>
               exprs.set(
                 this.range2var(cell, sheet.name),
-                this.printDfFormula(cell.formula, cell, sheet.name, sheet.table)
+                this.printDfFormula(
+                  cell.formula,
+                  cell,
+                  sheet.name,
+                  sheet.table,
+                  false
+                )
               )
             );
-          // TODO, add expr to mapping, intervene on ranges in getValVar to see if it matches a column and substitute the column reference
         } else {
           sheet.ranges
             .filter((cell) => cell.formula.print() !== "")
@@ -397,12 +488,14 @@ const langs = {
         }
       });
 
+      // topologically sort the expressions
       const sorted: Expression[] = [];
 
       exprs.forEach((v, k, m) => {
         this.addToSorted(sorted, v, k, m, sheetVals);
       });
 
+      // print with package dependencies
       return (
         "using SpreadsheetFunctions\n" +
         (tabular ? "using DataFrames\n" : "") +

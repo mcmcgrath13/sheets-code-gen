@@ -241,7 +241,9 @@ class Table {
     let rowExtent = ref.rowExtent(r.row);
     let columnExtent = ref.columnExtent(r.column);
     if (
+      rowExtent[0] >= this.range.start.row.value &&
       rowExtent[1] <= this.range.stop.row.value &&
+      columnExtent[0] >= this.range.start.column.value &&
       columnExtent[1] <= this.range.stop.column.value
     ) {
       return true;
